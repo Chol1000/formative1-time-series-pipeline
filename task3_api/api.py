@@ -775,3 +775,220 @@ def get_sql_sub_metering(household_id: Optional[int] = None):
         }
     finally:
         conn.close()
+
+# ============================================================================
+# MONGODB — MEASUREMENT CRUD
+# ============================================================================
+
+@app.post("/mongo/measurements", status_code=201, summary="[MongoDB] Create document")
+def create_mongo_measurement(body: MeasurementCreate):
+    ts_str = body.measurement_datetime
+    # 409 if this timestamp already exists in the store
+    for existing_doc in mongo_store.values():
+        if existing_doc.get("timestamp") == ts_str:
+            raise HTTPException(
+                status_code=409,
+                detail=f"MongoDB document with timestamp '{ts_str}' already exists (_id={existing_doc['_id']})",
+            )
+    doc_id = get_next_mongo_id()
+    try:
+        ts_dt  = datetime.fromisoformat(ts_str)
+    except ValueError:
+        ts_dt  = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+
+    doc: dict[str, Any] = {
+        "_id":                   doc_id,
+        "household_id":          body.household_id,
+        "timestamp":             ts_str,
+        "date":                  ts_str[:10],
+        "hour":                  ts_dt.hour,
+        "day_of_week":           ts_dt.weekday(),
+        "global_active_power":   body.global_active_power,
+        "global_reactive_power": body.global_reactive_power,
+        "voltage":               body.voltage,
+        "global_intensity":      body.global_intensity,
+        "sub_metering": [
+            {"meter_id": 1, "name": "Kitchen",
+             "consumption_wh": body.sub_metering_1 or 0.0},
+            {"meter_id": 2, "name": "Laundry / AC",
+             "consumption_wh": body.sub_metering_2 or 0.0},
+            {"meter_id": 3, "name": "Water Heater",
+             "consumption_wh": body.sub_metering_3 or 0.0},
+        ],
+        "created_at": datetime.now().isoformat(),
+    }
+    mongo_store[doc_id] = doc
+    return {
+        "status":    "created",
+        "_id":       doc_id,
+        "timestamp": ts_str,
+        "message":   "Document created in MongoDB",
+    }
+
+
+@app.get("/mongo/measurements", summary="[MongoDB] List documents")
+def list_mongo_measurements(limit: int = Query(10, ge=1, le=1000)):
+    """Return most-recent documents, sorted descending by timestamp."""
+    total = len(mongo_store)
+    sorted_docs = sorted(
+        mongo_store.values(),
+        key=lambda d: d.get("timestamp", ""),
+        reverse=True,
+    )
+    page = sorted_docs[:limit]
+    return {
+        "source":         "MongoDB",
+        "total_in_store": total,
+        "count":          len(page),
+        "data":           page,
+    }
+
+
+@app.get("/mongo/measurements/{doc_id}", summary="[MongoDB] Get document by ID")
+def get_mongo_measurement(doc_id: str):
+    if doc_id not in mongo_store:
+        raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+    return {"source": "MongoDB", "data": mongo_store[doc_id]}
+
+
+@app.put("/mongo/measurements/{doc_id}", summary="[MongoDB] Update document")
+def update_mongo_measurement(doc_id: str, body: MeasurementUpdate):
+    if doc_id not in mongo_store:
+        raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields provided for update")
+    mongo_store[doc_id].update(updates)
+    return {"status": "updated", "_id": doc_id, "updated_fields": updates}
+
+
+@app.delete("/mongo/measurements/{doc_id}", summary="[MongoDB] Delete document")
+def delete_mongo_measurement(doc_id: str):
+    if doc_id not in mongo_store:
+        raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+    mongo_store.pop(doc_id)
+    return {"status": "deleted", "_id": doc_id, "message": "Document deleted from MongoDB"}
+
+
+# ============================================================================
+# MONGODB — TIME-SERIES ENDPOINTS
+# ============================================================================
+
+@app.get("/mongo/latest", summary="[MongoDB] Latest document")
+def get_mongo_latest(household_id: Optional[int] = None):
+    docs = list(mongo_store.values())
+    if household_id:
+        docs = [d for d in docs if d.get("household_id") == household_id]
+    if not docs:
+        raise HTTPException(status_code=404, detail="No documents found")
+    latest = max(docs, key=lambda d: d.get("timestamp", ""))
+    return {"source": "MongoDB", "query": "Latest Record", "data": latest}
+
+
+@app.get("/mongo/date-range", summary="[MongoDB] Documents in date range")
+def get_mongo_date_range(
+    start_date:   str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date:     str = Query(..., description="End date YYYY-MM-DD"),
+    household_id: Optional[int] = None,
+    limit:        int = Query(100, ge=1, le=5000),
+):
+    docs = [
+        d for d in mongo_store.values()
+        if start_date <= d.get("date", "") <= end_date
+    ]
+    if household_id:
+        docs = [d for d in docs if d.get("household_id") == household_id]
+    docs.sort(key=lambda d: d.get("timestamp", ""))
+    page = docs[:limit]
+    return {
+        "source":     "MongoDB",
+        "query":      "Date Range",
+        "start_date": start_date,
+        "end_date":   end_date,
+        "count":      len(page),
+        "data":       page,
+    }
+
+
+@app.get("/mongo/hourly-stats", summary="[MongoDB] Hourly aggregate stats")
+def get_mongo_hourly_stats(household_id: Optional[int] = None):
+    """Return per-hour (0-23) avg / peak / min power from the in-memory store."""
+    docs = list(mongo_store.values())
+    if household_id:
+        docs = [d for d in docs if d.get("household_id") == household_id]
+
+    buckets: dict[int, list[float]] = defaultdict(list)
+    for d in docs:
+        h = d.get("hour")
+        p = d.get("global_active_power")
+        if h is not None and p is not None:
+            buckets[int(h)].append(float(p))
+
+    stats = []
+    for hour in sorted(buckets):
+        vals = buckets[hour]
+        stats.append({
+            "hour":          hour,
+            "record_count":  len(vals),
+            "avg_power_kW":  round(sum(vals) / len(vals), 4),
+            "peak_power_kW": round(max(vals), 4),
+            "min_power_kW":  round(min(vals), 4),
+        })
+
+    return {
+        "source": "MongoDB",
+        "query":  "Hourly Stats",
+        "count":  len(stats),
+        "data":   stats,
+    }
+
+
+@app.get("/mongo/daily-summary", summary="[MongoDB] Daily energy summary")
+def get_mongo_daily_summary(
+    start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD (optional)"),
+    end_date:   Optional[str] = Query(None, description="End date YYYY-MM-DD (optional)"),
+    limit:      int            = Query(30, ge=1, le=500),
+):
+    """Aggregate per-day total/avg/peak power from the in-memory store."""
+    docs = list(mongo_store.values())
+    if start_date:
+        docs = [d for d in docs if d.get("date", "") >= start_date]
+    if end_date:
+        docs = [d for d in docs if d.get("date", "") <= end_date]
+
+    daily: dict[str, list[float]] = defaultdict(list)
+    for d in docs:
+        date = d.get("date")
+        p    = d.get("global_active_power")
+        if date and p is not None:
+            daily[date].append(float(p))
+
+    summaries = []
+    for date in sorted(daily, reverse=True)[:limit]:
+        vals = daily[date]
+        summaries.append({
+            "date":             date,
+            "record_count":     len(vals),
+            "total_energy_kWh": round(sum(vals) / 60.0, 4),
+            "avg_power_kW":     round(sum(vals) / len(vals), 4),
+            "peak_power_kW":    round(max(vals), 4),
+        })
+
+    return {
+        "source": "MongoDB",
+        "query":  "Daily Summary",
+        "count":  len(summaries),
+        "data":   summaries,
+    }
+
+
+# ============================================================================
+# ENTRY POINT
+# ============================================================================
+
+if __name__ == "__main__":
+    import uvicorn
+    print("Starting Household Power Consumption API ...")
+    print("Swagger Docs : http://localhost:8000/docs")
+    print("Run tests    : python task3_api/test_api.py")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
