@@ -214,3 +214,32 @@ def test_mongo_measurements():
                  requests.delete(f"{BASE_URL}/mongo/measurements/{doc_id}"))
     print(f"        status={body.get('status')}")
 
+
+def test_mongo_timeseries():
+    print("\n--- MongoDB: Time-Series ---")
+
+    body = check("GET /mongo/latest",
+                 requests.get(f"{BASE_URL}/mongo/latest"))
+    d = body.get("data", {})
+    print(f"        timestamp={d.get('timestamp')}  power={d.get('global_active_power')}")
+
+    body = check("GET /mongo/date-range  (2006-12-16 to 2006-12-18)",
+                 requests.get(f"{BASE_URL}/mongo/date-range"
+                              "?start_date=2006-12-16&end_date=2006-12-18"))
+    print(f"        count={body.get('count')}")
+    if body.get("data"):
+        first = body["data"][0]
+        print(f"        first: date={first.get('date')}  "
+              f"power={first.get('global_active_power')}")
+
+    body = check("GET /mongo/hourly-stats",
+                 requests.get(f"{BASE_URL}/mongo/hourly-stats"))
+    first = body.get("data", [{}])[0]
+    print(f"        count={body.get('count')}  "
+          f"hour_0: avg={first.get('avg_power_kW')}  peak={first.get('peak_power_kW')}")
+
+    body = check("GET /mongo/daily-summary  (last 5 days)",
+                 requests.get(f"{BASE_URL}/mongo/daily-summary?days=5"))
+    first = body.get("data", [{}])[0]
+    print(f"        count={body.get('count')}  most_recent_date={first.get('date')}")
+
