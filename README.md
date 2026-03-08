@@ -1,42 +1,54 @@
-# ⚡ Time Series Data Pipeline
-### Household Electric Power Consumption — EDA, Databases, REST API, and Forecasting
+# Time Series Data Pipeline
+
+Household Electric Power Consumption — EDA, Databases, REST API, and Forecasting
+
+**Group 12** | Machine Learning Pipeline | 8 March 2026  
+**Repository:** https://github.com/Chol1000/formative1-time-series-pipeline.git
 
 ---
 
-## 📋 Project Overview
+## Problem Statement
 
-This project implements a complete time-series data pipeline for the UCI Household Electric Power Consumption dataset.
-
-The dataset records 1-minute electricity measurements from a single household in Sceaux, France, spanning December 2006 to November 2010 (~2.07 million rows). The pipeline covers four tasks:
-
-| Task | Description |
-|------|-------------|
-| **Task 1** | EDA, preprocessing, 6 analytical questions with visualisations, and ML model training |
-| **Task 2** | MySQL (4 tables) and MongoDB database design, ERD, schema scripts, and query execution |
-| **Task 3** | FastAPI REST API with full CRUD and time-series endpoints backed by MySQL and MongoDB |
-| **Task 4** | End-to-end prediction script — fetches from the API, preprocesses, loads the trained model, and forecasts |
+This project addresses the problem of one-minute-ahead residential electricity demand forecasting. Given all household electricity measurements available up to time $t$, the objective is to accurately predict the global active power (kW) at time $t+1$. Accurate short-term load forecasting is fundamental to smart-grid demand-response systems, enabling energy providers to balance supply against demand, schedule storage dispatch, and reduce grid stress during peak periods.
 
 ---
 
-## 📊 Dataset
+## Dataset Justification
+
+The [UCI Individual Household Electric Power Consumption dataset](https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data) was selected because it offers nearly four years of one-minute-resolution data spanning December 2006 to November 2010, yielding over two million observations. This volume is sufficient to capture daily, weekly, and seasonal demand cycles simultaneously. The target variable, `global_active_power` (kW), is a direct and physically interpretable measure of household energy demand with no proxy encoding required. The dataset also records seven simultaneous measurement channels — voltage, current intensity, reactive power, and three sub-metering circuits — enabling multivariate correlation and leakage analysis. It is a widely used benchmark in time-series forecasting research, allowing result comparison against published baselines.
 
 | Property | Value |
 |----------|-------|
-| **Source** | UCI ML Repository via Kaggle |
-| **File** | `household_power_consumption.txt` |
-| **Time Range** | 16 Dec 2006 – 26 Nov 2010 (4 years) |
-| **Frequency** | 1-minute intervals |
-| **Records** | 2,075,259 (after resampling to complete 1-min grid) |
-| **Target** | `global_active_power` (kW) |
-| **Channels** | Voltage (V), Global Intensity (A), Reactive Power (kVAR), Sub-metering 1/2/3 (Wh) |
+| Source | [UCI ML Repository via Kaggle](https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data) |
+| File | `household_power_consumption.txt` (excluded from repo — 127 MB) |
+| Time range | 16 Dec 2006 – 26 Nov 2010 (4 years) |
+| Frequency | 1-minute intervals |
+| Records | 2,075,259 (after resampling to complete 1-min grid) |
+| Target | `global_active_power` (kW) |
+| Channels | Voltage (V), Global Intensity (A), Reactive Power (kVAR), Sub-metering 1/2/3 (Wh) |
+
+> The raw file is excluded from version control. Download it from the Kaggle link above and place it in the project root before running any task.
 
 ---
 
-## 🗂️ Repository Structure
+## Project Overview
+
+The pipeline is divided into four sequential tasks:
+
+| Task | Description |
+|------|-------------|
+| Task 1 | EDA, preprocessing, 6 analytical questions with visualisations, and ML model training |
+| Task 2 | MySQL (4 tables) and MongoDB database design, ERD, schema scripts, and query execution |
+| Task 3 | FastAPI REST API with full CRUD and time-series endpoints backed by MySQL and MongoDB |
+| Task 4 | End-to-end prediction script — fetches from the API, preprocesses, loads the trained model, and forecasts |
+
+---
+
+## Repository Structure
 
 ```
 TimeSeriesDataPipeline/
-├── household_power_consumption.txt    # Raw dataset (127 MB, semicolon-delimited)
+├── household_power_consumption.txt    # Raw dataset (127 MB) — not tracked in git
 ├── requirements.txt
 ├── README.md
 ├── task1_eda/
@@ -82,20 +94,20 @@ TimeSeriesDataPipeline/
 
 ---
 
-## ⚙️ Prerequisites
+## Prerequisites
 
-- **Python 3.8+**
-- **MySQL 8.0+** running on `localhost:3306`, root user, no password
-- **MongoDB** (optional) — `mongodb://localhost:27017`. Task 2 falls back to JSON simulation mode automatically if unavailable.
+- Python 3.8+
+- MySQL 8.0+ running on `localhost:3306`, root user, no password
+- MongoDB (optional) — `mongodb://localhost:27017`. Task 2 falls back to JSON simulation mode automatically if unavailable.
 
 ---
 
-## 🚀 Setup
+## Setup
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/Chol1000/formative_dummy.git
-cd TimeSeriesDataPipeline
+git clone https://github.com/Chol1000/formative1-time-series-pipeline.git
+cd formative1-time-series-pipeline
 
 # 2. Create and activate virtual environment
 python3 -m venv venv
@@ -105,19 +117,24 @@ source venv/bin/activate        # macOS / Linux
 # 3. Install all dependencies
 pip install -r requirements.txt
 
-# 4. Create the MySQL database (one-time setup)
+# 4. Download the dataset
+# Download household_power_consumption.txt from:
+# https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data
+# Place it in the project root before running any task.
+
+# 5. Create the MySQL database (one-time setup)
 mysql -u root -e "CREATE DATABASE IF NOT EXISTS household_power;"
 ```
 
 ---
 
-## 📓 Task 1 — EDA, Preprocessing & Model Training
+## Task 1 — EDA, Preprocessing and Model Training
 
 ### How to Run
 
 Open `task1_eda/task1_notebook.ipynb` in VS Code or Jupyter and run all cells from top to bottom.
 
-> All plots are saved to `outputs/` and all model artefacts to `data/` automatically.
+All plots are saved to `outputs/` and all model artefacts to `data/` automatically.
 
 ### What it Does
 
@@ -125,34 +142,34 @@ Open `task1_eda/task1_notebook.ipynb` in VS Code or Jupyter and run all cells fr
 
 - Loads and parses the raw semicolon-delimited file
 - Reports time range (Dec 2006 – Nov 2010), granularity (1-min), and dataset coverage (98.8%)
-- Missing value audit: **25,979 rows (1.25%)** — meter-offline gaps across all columns simultaneously
-- Justification: linear interpolation chosen over forward fill, mean imputation, and row deletion — preserves 1-minute regularity required by lag features
+- Missing value audit: 25,979 rows (1.25%) — meter-offline gaps across all columns simultaneously
+- Linear interpolation chosen over forward fill, mean imputation, and row deletion — preserves 1-minute regularity required by lag features
 - Resamples to a complete 1-minute grid (2,075,259 rows after interpolation)
 - Saves statistical distributions (mean, std, skewness, kurtosis) for all 7 numeric columns
 
-**Section 1B — Six Analytical Questions (each with visualisation and written interpretation)**
+**Section 1B — Six Analytical Questions**
 
 | # | Question | Key Finding |
 |---|----------|-------------|
 | Q1 | Does consumption show long-term trend or seasonality? | No trend 2007–2010; peak Dec ~1.49 kW, trough Aug ~0.58 kW (amplitude 0.91 kW) |
 | Q2 | What are daily and weekly usage patterns? | Evening peak at 20:00 (1.89 kW); weekends 17.9% higher than weekdays |
-| Q3 | Do lagged values predict current consumption? | 1-min lag r = 0.9682; drops below 0.5 only at 1-hour horizon → justifies lag_1/5/15/60 features |
+| Q3 | Do lagged values predict current consumption? | 1-min lag r = 0.9682; drops below 0.5 only at 1-hour horizon — justifies lag_1/5/15/60 features |
 | Q4 | Does a moving average reveal hidden cycles? | 7/30/90-day MAs expose seasonal pattern; highest volatility Feb, lowest Jul |
 | Q5 | How do sub-metering circuits relate to total power? | Sub-meter 3 (HVAC/water heater) highest correlation (r = 0.64) |
-| Q6 | Do voltage, intensity, reactive power correlate with active power? | Intensity r = +0.999 — all three excluded to prevent contemporaneous data leakage |
+| Q6 | Do voltage, intensity, reactive power correlate with active power? | Intensity r = +0.999 — voltage and reactive power excluded to prevent data leakage |
 
 **Section 1C — Model Training and Experiments**
 
-- **Split:** strict chronological 80/20 — Train: 1,660,159 rows · Test: 415,040 rows
-- **CV:** `TimeSeriesSplit(n_splits=3)` on 100K-row chronological tail
-- **Tuning:** `RandomizedSearchCV` — 20 iterations (RF), 25 iterations (GB)
+- Split: strict chronological 80/20 — Train: 1,660,159 rows / Test: 415,040 rows
+- CV: `TimeSeriesSplit(n_splits=3)` on 100K-row chronological tail
+- Tuning: `RandomizedSearchCV` — 20 iterations (RF), 25 iterations (GB)
 
-| # | Model | MAE (kW) | RMSE (kW) | MAPE (%) | R² |
-|---|-------|----------|-----------|----------|----|
-| Baseline | Naive Persistence | 0.0692 | 0.2170 | 7.06 | 0.9387 |
-| 1 | Linear Regression | 0.0831 | 0.2161 | 9.89 | 0.9392 |
-| **2** | **Random Forest (tuned)** | **0.0694** | **0.2133** | **6.97** | **0.9408** ✅ Best |
-| 3 | Gradient Boosting (tuned) | 0.0706 | 0.2153 | 7.05 | 0.9397 |
+| Model | MAE (kW) | RMSE (kW) | MAPE (%) | R² |
+|-------|----------|-----------|----------|----|
+| Naive Persistence (baseline) | 0.0692 | 0.2170 | 7.06 | 0.9387 |
+| Linear Regression | 0.0831 | 0.2161 | 9.89 | 0.9392 |
+| **Random Forest (tuned)** | **0.0694** | **0.2133** | **6.97** | **0.9408** |
+| Gradient Boosting (tuned) | 0.0706 | 0.2153 | 7.05 | 0.9397 |
 
 Best RF hyperparameters: `n_estimators=100, max_depth=8, min_samples_split=5, min_samples_leaf=2, max_features=0.7`
 
@@ -179,7 +196,7 @@ data/experiment_results.json  All 4 experiment rows
 
 ---
 
-## 🗄️ Task 2 — Database Design and Implementation
+## Task 2 — Database Design and Implementation
 
 ### Prerequisites
 
@@ -193,9 +210,9 @@ mysql -u root -e "CREATE DATABASE IF NOT EXISTS household_power;"
 python task2_databases/task2_main.py
 ```
 
-Expected runtime: **5–15 minutes** (2,075,259 rows inserted in 5000-row chunks).
+Expected runtime: 5–15 minutes (2,075,259 rows inserted in 5,000-row chunks).
 
-### SQL — MySQL (4 Tables)
+### MySQL — 4 Tables
 
 ```
 households ──┬──> measurements ──> sub_metering
@@ -216,12 +233,12 @@ households ──┬──> measurements ──> sub_metering
 3. JOIN — measurements + sub-metering (first 15 rows)
 4. Top-10 peak demand hours (from `hourly_aggregates`)
 5. Monthly consumption trend (~48 months)
-6. Sub-metering energy share per appliance group (UNION ALL)
+6. Sub-metering energy share per appliance group
 7. Day-of-week consumption pattern
 
-### MongoDB (2 Collections)
+### MongoDB — 2 Collections
 
-**`power_readings`** — one document per measurement:
+**`power_readings`** — one document per measurement (50,000 sampled documents):
 
 ```json
 {
@@ -244,7 +261,7 @@ households ──┬──> measurements ──> sub_metering
 
 Indexes: `{household_id, timestamp}`, `{timestamp}`, `{date}`, `{hour}`
 
-**`daily_summaries`** — pre-aggregated daily stats via `$out` aggregation pipeline.
+**`daily_summaries`** — 1,425 day-records built via MongoDB `$out` aggregation pipeline.
 
 **5 MongoDB queries executed and saved to `outputs/task2/mongodb_query_results.txt`:**
 
@@ -252,9 +269,9 @@ Indexes: `{household_id, timestamp}`, `{timestamp}`, `{date}`, `{hour}`
 2. Date range query (2006-12-16 to 2006-12-19)
 3. Hourly aggregation (`$group` by hour)
 4. Sub-metering breakdown (`$unwind` + `$group` by appliance name)
-5. Daily summary from `daily_summaries` collection (1,425 day-records)
+5. Daily summary from `daily_summaries` collection
 
-> **No MongoDB server?** Auto-detected — script falls back to **JSON simulation mode**. All 5 queries run against in-memory Python structures and produce identical output.
+> No MongoDB server? The script auto-detects this and falls back to JSON simulation mode. All 5 queries run against in-memory Python structures and produce identical output.
 
 **Outputs saved automatically:**
 
@@ -263,13 +280,13 @@ outputs/task2/schema.sql                    MySQL DDL script
 outputs/task2/erd_diagram.png               Entity-Relationship Diagram
 outputs/task2/sql_query_results.txt         All 7 SQL query results
 outputs/task2/mongodb_collection_design.txt Collection schema + query templates
-outputs/task2/sample_documents.json         3 sample docs (start/mid/end of dataset)
+outputs/task2/sample_documents.json         3 sample documents
 outputs/task2/mongodb_query_results.txt     All 5 MongoDB query results
 ```
 
 ---
 
-## 🌐 Task 3 — REST API (FastAPI)
+## Task 3 — REST API (FastAPI)
 
 ### How to Run
 
@@ -286,39 +303,40 @@ python task3_api/test_api.py
 
 On startup the API seeds an in-memory MongoDB store with 1,000 step-sampled documents from MySQL, spanning the full 4-year dataset.
 
-### SQL Endpoints (`/sql/`)
+### SQL Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/` | Health check |
-| `GET` | `/sql/households` | List all households |
-| `POST` | `/sql/households` | Create a household |
-| `GET` | `/sql/households/{id}` | Get household by ID |
-| `PUT` | `/sql/households/{id}` | Update household |
-| `DELETE` | `/sql/households/{id}` | Delete household |
-| `POST` | `/sql/measurements` | Create a measurement |
-| `GET` | `/sql/measurements` | List measurements (paginated) |
-| `GET` | `/sql/measurements/{id}` | Get measurement by ID |
-| `PUT` | `/sql/measurements/{id}` | Update measurement |
-| `DELETE` | `/sql/measurements/{id}` | Delete measurement |
-| `GET` | `/sql/latest` | Latest measurement record |
-| `GET` | `/sql/date-range` | Records between `start_date` and `end_date` |
-| `GET` | `/sql/hourly-stats` | Hourly averages across the dataset |
-| `GET` | `/sql/monthly-trend` | Monthly average power trend |
+| GET | `/` | Health check |
+| POST | `/sql/households` | Create a household |
+| GET | `/sql/households` | List all households |
+| GET | `/sql/households/{id}` | Get household by ID |
+| PUT | `/sql/households/{id}` | Update household |
+| DELETE | `/sql/households/{id}` | Delete household |
+| POST | `/sql/measurements` | Create a measurement |
+| GET | `/sql/measurements` | List measurements (paginated) |
+| GET | `/sql/measurements/{id}` | Get measurement by ID |
+| PUT | `/sql/measurements/{id}` | Update measurement |
+| DELETE | `/sql/measurements/{id}` | Delete measurement |
+| GET | `/sql/latest` | Latest measurement record |
+| GET | `/sql/date-range` | Records between `start_date` and `end_date` |
+| GET | `/sql/hourly-stats` | Hourly averages across the dataset |
+| GET | `/sql/monthly-trend` | Monthly average power trend |
+| GET | `/sql/sub-metering` | Sub-metering energy breakdown |
 
-### MongoDB Endpoints (`/mongo/`)
+### MongoDB Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/mongo/measurements` | Create a document |
-| `GET` | `/mongo/measurements` | List documents (paginated) |
-| `GET` | `/mongo/measurements/{id}` | Get document by ID |
-| `PUT` | `/mongo/measurements/{id}` | Update document |
-| `DELETE` | `/mongo/measurements/{id}` | Delete document |
-| `GET` | `/mongo/latest` | Latest document by timestamp |
-| `GET` | `/mongo/date-range` | Documents between two dates |
-| `GET` | `/mongo/hourly-stats` | Hourly average stats |
-| `GET` | `/mongo/daily-summary` | Daily summary (last N days) |
+| POST | `/mongo/measurements` | Create a document |
+| GET | `/mongo/measurements` | List documents (paginated) |
+| GET | `/mongo/measurements/{id}` | Get document by ID |
+| PUT | `/mongo/measurements/{id}` | Update document |
+| DELETE | `/mongo/measurements/{id}` | Delete document |
+| GET | `/mongo/latest` | Latest document by timestamp |
+| GET | `/mongo/date-range` | Documents between two dates |
+| GET | `/mongo/hourly-stats` | Hourly average stats |
+| GET | `/mongo/daily-summary` | Daily summary (last N days) |
 
 ### Example Requests
 
@@ -336,20 +354,15 @@ curl "http://localhost:8000/sql/date-range?start_date=2006-12-16&end_date=2006-1
 
 # Latest MongoDB document
 curl http://localhost:8000/mongo/latest
-
-# Create a MongoDB measurement
-curl -X POST http://localhost:8000/mongo/measurements \
-  -H "Content-Type: application/json" \
-  -d '{"household_id":1,"measurement_datetime":"2009-01-01 12:00:00","global_active_power":2.5}'
 ```
 
 ---
 
-## 🤖 Task 4 — Prediction and Forecast Script
+## Task 4 — Prediction and Forecast Script
 
 ### Prerequisites
 
-The Task 3 API must be running (or use `--no-api`).
+Task 1 must be completed (model artefacts in `data/`) and the Task 3 API must be running.
 
 ```bash
 python task3_api/api.py &
@@ -360,60 +373,242 @@ python task3_api/api.py &
 ```bash
 # Full pipeline — fetches live from the API
 python task4_prediction/prediction_script.py
-
-# Without API — falls back to MySQL then raw .txt file
-python task4_prediction/prediction_script.py --no-api
 ```
+
+If the API is unavailable, the script automatically falls back to MySQL, then to the raw `.txt` file.
 
 ### Pipeline Steps
 
 | Step | Action | Detail |
 |------|--------|--------|
-| **1 — Fetch** | Pull 500 records from `GET /sql/date-range` | Falls back to MySQL then raw `.txt` if API unreachable |
-| **2 — Preprocess** | Interpolate + build 15 features | Mirrors Task 1 feature pipeline; first 60 rows dropped for lag_60 warm-up |
-| **3 — Load Model** | Restore `best_model.joblib` + `best_scaler.joblib` | RandomForestRegressor + MinMaxScaler |
-| **4 — Predict** | Score 440 records against real ground truth | MAE, RMSE, MAPE, R²; 10-row actual vs predicted table |
-| **5 — Forecast** | 12-step autoregressive forecast | Each prediction feeds back as `lag_1`; temporal features updated per minute |
+| 1 — Fetch | Pull 500 records from `GET /sql/date-range` | Falls back to MySQL then raw `.txt` if API unreachable |
+| 2 — Preprocess | Interpolate and build 15 features | Mirrors Task 1 feature pipeline; first 60 rows dropped for lag_60 warm-up |
+| 3 — Load Model | Restore `best_model.joblib` and `best_scaler.joblib` | RandomForestRegressor + MinMaxScaler |
+| 4 — Predict | Score 440 records against real ground truth | MAE, RMSE, MAPE, R² |
+| 5 — Forecast | 12-step autoregressive forecast | Each prediction feeds back as `lag_1`; temporal features updated per minute |
 
-### Sample Output (live run)
+### Sample Output
 
 ```
 STEP 1: Source           : Task 3 REST API  (GET /sql/date-range)
-         Records fetched  : 500  (2006-12-16 17:24 -> 2006-12-17 01:43)
+        Records fetched  : 500  (2006-12-16 17:24 -> 2006-12-17 01:43)
 
 STEP 2: Records processed : 440  (60 lag warm-up rows removed)
-         Features          : 15
+        Features          : 15
 
 STEP 3: Model  : best_model.joblib  (RandomForestRegressor)
-         Scaler : best_scaler.joblib (MinMaxScaler)
+        Scaler : best_scaler.joblib (MinMaxScaler)
 
 STEP 4: MAE   = 0.4974 kW
-         RMSE  = 0.8114 kW
-         MAPE  = 36.39 %
-         R2    = 0.3263
+        RMSE  = 0.8114 kW
+        MAPE  = 36.39 %
+        R2    = 0.3263
 
 STEP 5:  t+ 1min  [2006-12-17 01:44]  2.6218 kW
-          t+ 6min  [2006-12-17 01:49]  2.5967 kW
-          t+12min  [2006-12-17 01:55]  2.5827 kW
+         t+ 6min  [2006-12-17 01:49]  2.5967 kW
+         t+12min  [2006-12-17 01:55]  2.5827 kW
 ```
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
-| `mysql.connector.errors.DatabaseError` | Ensure MySQL is running and `household_power` database exists |
-| `Port 8000 already in use` | `lsof -ti:8000 \| xargs kill -9` |
-| `FileNotFoundError: best_model.joblib` on Task 4 | Run Task 1 notebook first to train and save model artefacts |
-| Task 4 `API is not running (connection refused)` | Start the API first, or use `--no-api` |
-| Task 2 MongoDB `Connection failed` | Expected if no server running — JSON simulation mode produces identical results |
+| `mysql.connector.errors.DatabaseError` | Ensure MySQL is running and the `household_power` database exists |
+| Port 8000 already in use | `lsof -ti:8000 \| xargs kill -9` |
+| `FileNotFoundError: best_model.joblib` | Run Task 1 notebook first to train and save model artefacts |
+| Task 4 connection refused | Start the API (Task 3) first |
+| Task 2 MongoDB connection failed | Expected if no server running — simulation mode produces identical results |
 
 ---
 
-## 📚 References
+## References
 
-- [UCI Household Electric Power Consumption Dataset](https://archive.ics.uci.edu/ml/datasets/Individual+household+electric+power+consumption)
+- [UCI Household Electric Power Consumption Dataset — Kaggle](https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Scikit-learn Documentation](https://scikit-learn.org/)
+- [MongoDB Aggregation Pipeline](https://www.mongodb.com/docs/manual/core/aggregation-pipeline/)
+
+This project addresses the problem of one-minute-ahead residential electricity demand forecasting. Given all household electricity measurements available up to time $t$, the objective is to accurately predict the global active power (kW) at time $t+1$. Accurate short-term load forecasting is fundamental to smart-grid demand-response systems, enabling energy providers to balance supply against demand, schedule storage dispatch, and reduce grid stress during peak periods.
+
+---
+
+## Dataset Justification
+
+The [UCI Individual Household Electric Power Consumption dataset](https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data) was selected because it offers nearly four years of one-minute-resolution data spanning December 2006 to November 2010, yielding over two million observations. This volume is sufficient to capture daily, weekly, and seasonal demand cycles simultaneously.
+
+The target variable, `global_active_power` (kW), is a direct and physically interpretable measure of household energy demand. The dataset also records seven simultaneous measurement channels — voltage, current intensity, reactive power, and three sub-metering circuits — enabling multivariate correlation and leakage analysis. It is a widely used benchmark in time-series forecasting research, allowing result comparison against published baselines.
+
+| Property | Value |
+|----------|-------|
+| Source | [UCI ML Repository via Kaggle](https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data) |
+| File | `household_power_consumption.txt` (excluded from repo — 127 MB) |
+| Time range | 16 Dec 2006 – 26 Nov 2010 |
+| Frequency | 1-minute intervals |
+| Records | 2,075,259 |
+| Target | `global_active_power` (kW) |
+| Channels | Voltage (V), Global Intensity (A), Reactive Power (kVAR), Sub-metering 1/2/3 (Wh) |
+
+> The raw file is excluded from version control. Download it from the Kaggle link above and place it in the project root before running any task.
+
+---
+
+## Solution
+
+The pipeline is divided into four sequential tasks:
+
+| Task | Component | Description |
+|------|-----------|-------------|
+| Task 1 | EDA and Model Training | Preprocessing, 6 analytical questions, and training 4 models with chronological cross-validation |
+| Task 2 | Database Design | Normalised MySQL schema (4 tables, 2,075,259 rows) and MongoDB document store (50,000 sampled documents) |
+| Task 3 | REST API | FastAPI service with 24 endpoints covering full CRUD and time-series queries on both databases |
+| Task 4 | Prediction Pipeline | End-to-end script that fetches live data from the API, applies the feature pipeline, evaluates the model, and produces a 12-step autoregressive forecast |
+
+The selected model is a tuned Random Forest Regressor achieving **RMSE = 0.2133 kW** and **R² = 0.941** on the held-out chronological test set (Aug 2009 – Nov 2010).
+
+---
+
+## Repository Structure
+
+```
+TimeSeriesDataPipeline/
+├── requirements.txt
+├── README.md
+├── task1_eda/
+│   └── task1_notebook.ipynb        # EDA, 6 analytical questions, model training
+├── task2_databases/
+│   ├── sql_database.py             # MySQL schema, bulk load, 7 queries, ERD
+│   ├── mongodb_implementation.py   # MongoDB documents, 5 queries
+│   └── task2_main.py               # Entry point — runs SQL then MongoDB
+├── task3_api/
+│   ├── api.py                      # FastAPI endpoints (port 8000)
+│   └── test_api.py                 # Automated test suite (24 tests)
+├── task4_prediction/
+│   └── prediction_script.py        # Prediction + 12-step autoregressive forecast
+├── data/
+│   ├── best_model.joblib           # Trained Random Forest model
+│   ├── best_scaler.joblib          # Fitted MinMaxScaler
+│   └── feature_columns.json        # 15 feature names
+└── outputs/                        # Saved plots and query results
+```
+
+---
+
+## Setup and Reproduction
+
+Follow these steps in order. Each task depends on the previous one.
+
+### 1. Prerequisites
+
+- Python 3.8+
+- MySQL 8.0+ running on `localhost:3306`, root user, no password
+- MongoDB (optional) — if unavailable, Task 2 runs in simulation mode automatically
+
+### 2. Clone and install
+
+```bash
+git clone https://github.com/Chol1000/formative1-time-series-pipeline.git
+cd formative1-time-series-pipeline
+
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+
+pip install -r requirements.txt
+```
+
+### 3. Download the dataset
+
+Download `household_power_consumption.txt` from [Kaggle](https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data) and place it in the project root:
+
+```
+formative1-time-series-pipeline/
+└── household_power_consumption.txt   ← place here
+```
+
+### 4. Create the MySQL database
+
+```bash
+mysql -u root -e "CREATE DATABASE IF NOT EXISTS household_power;"
+```
+
+### 5. Task 1 — EDA and model training
+
+Open `task1_eda/task1_notebook.ipynb` in VS Code or Jupyter and run all cells top to bottom.
+
+This will:
+- Parse and interpolate the raw dataset
+- Answer 6 analytical questions and save plots to `outputs/`
+- Train 4 models and save the best to `data/best_model.joblib`
+
+### 6. Task 2 — Database population
+
+```bash
+python task2_databases/task2_main.py
+```
+
+Runtime: approximately 5–15 minutes. This inserts all 2,075,259 rows into MySQL and populates the MongoDB collections. Results are saved to `outputs/task2/`.
+
+### 7. Task 3 — Start the API
+
+```bash
+# Terminal 1
+python task3_api/api.py
+# API:     http://localhost:8000
+# Swagger: http://localhost:8000/docs
+```
+
+To verify all 24 endpoints pass:
+
+```bash
+# Terminal 2
+python task3_api/test_api.py
+# Expected: 24/24 PASS
+```
+
+### 8. Task 4 — Run the prediction pipeline
+
+With the API running in Terminal 1:
+
+```bash
+# Terminal 2
+python task4_prediction/prediction_script.py
+```
+
+The script fetches 500 records from the API, engineers 15 features, scores 440 rows against the saved model, and outputs evaluation metrics plus a 12-step forecast.
+
+If the API is not running, the script automatically falls back to MySQL, then to the raw `.txt` file.
+
+---
+
+## Model Results
+
+| Model | RMSE (kW) | R² |
+|-------|-----------|----|
+| Naive Persistence (baseline) | 0.2170 | 0.9387 |
+| Linear Regression | 0.2161 | 0.9392 |
+| **Random Forest (tuned)** | **0.2133** | **0.9408** |
+| Gradient Boosting (tuned) | 0.2153 | 0.9397 |
+
+Chronological 80/20 split — 1,660,159 training rows (Dec 2006 – Aug 2009), 415,040 test rows (Aug 2009 – Nov 2010).
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `mysql.connector.errors.DatabaseError` | Ensure MySQL is running and the `household_power` database exists |
+| Port 8000 already in use | `lsof -ti:8000 \| xargs kill -9` |
+| `FileNotFoundError: best_model.joblib` | Run Task 1 notebook first |
+| Task 4 connection refused | Start the API (Task 3) first |
+| MongoDB connection failed | Expected if no server — simulation mode runs automatically |
+
+---
+
+## References
+
+- [UCI Household Electric Power Consumption Dataset — Kaggle](https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Scikit-learn](https://scikit-learn.org/)
 - [MongoDB Aggregation Pipeline](https://www.mongodb.com/docs/manual/core/aggregation-pipeline/)
