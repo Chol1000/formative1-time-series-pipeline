@@ -1,0 +1,29 @@
+
+# Virtual environments
+venv/
+.venv/
+.venv-1/
+env/
+
+# Raw dataset (127 MB — too large for GitHub)
+household_power_consumption.txt
+archive*.zip
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Large binary model files (optional — comment out if you want to include them)
+# data/best_model.joblib
+# data/best_scaler.joblib

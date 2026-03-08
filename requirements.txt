@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+joblib
+requests
+pydantic
+pymongo
+mongomock
+mysql-connector-python
