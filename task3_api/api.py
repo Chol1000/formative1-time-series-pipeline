@@ -356,3 +356,196 @@ def delete_sql_household(household_id: int):
         raise HTTPException(status_code=400, detail=str(exc))
     finally:
         conn.close()
+
+# ============================================================================
+# SQL — MEASUREMENT CRUD
+# ============================================================================
+
+@app.post("/sql/measurements", status_code=201, summary="[SQL] Create measurement")
+def create_sql_measurement(body: MeasurementCreate):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+
+        # 409 if this datetime already exists
+        cur.execute(
+            "SELECT measurement_id FROM measurements WHERE measurement_datetime = %s",
+            (body.measurement_datetime,),
+        )
+        existing = cur.fetchone()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Measurement with datetime '{body.measurement_datetime}' already exists (id={existing['measurement_id']})",
+            )
+
+        cur.execute(
+            "INSERT INTO measurements "
+            "(household_id, measurement_datetime, global_active_power, "
+            " global_reactive_power, voltage, global_intensity) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (
+                body.household_id,
+                body.measurement_datetime,
+                body.global_active_power,
+                body.global_reactive_power,
+                body.voltage,
+                body.global_intensity,
+            ),
+        )
+        meas_id = cur.lastrowid
+
+        # Insert sub_metering using the NORMALIZED schema
+        if any(v is not None for v in [body.sub_metering_1, body.sub_metering_2, body.sub_metering_3]):
+            cur.execute(
+                "INSERT INTO sub_metering "
+                "(measurement_id, sub_metering_1, sub_metering_2, sub_metering_3) "
+                "VALUES (%s, %s, %s, %s)",
+                (
+                    meas_id,
+                    body.sub_metering_1 or 0.0,
+                    body.sub_metering_2 or 0.0,
+                    body.sub_metering_3 or 0.0,
+                ),
+            )
+
+        conn.commit()
+        return {
+            "status":         "created",
+            "measurement_id": meas_id,
+            "datetime":       body.measurement_datetime,
+            "message":        "Measurement created successfully in SQL database",
+        }
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        conn.close()
+
+
+@app.get("/sql/measurements", summary="[SQL] List measurements")
+def list_sql_measurements(limit: int = Query(10, ge=1, le=1000)):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            """
+            SELECT m.measurement_id,
+                   h.household_name,
+                   m.measurement_datetime AS datetime,
+                   m.global_active_power,
+                   m.global_reactive_power,
+                   m.voltage,
+                   m.global_intensity
+            FROM measurements m
+            JOIN households h ON m.household_id = h.household_id
+            ORDER BY m.measurement_datetime DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = cur.fetchall()
+        return {"source": "SQL", "count": len(rows), "data": rows}
+    finally:
+        conn.close()
+
+
+@app.get("/sql/measurements/{measurement_id}", summary="[SQL] Get measurement by ID")
+def get_sql_measurement(measurement_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            """
+            SELECT m.measurement_id,
+                   m.household_id,
+                   h.household_name,
+                   m.measurement_datetime AS datetime,
+                   m.global_active_power,
+                   m.global_reactive_power,
+                   m.voltage,
+                   m.global_intensity,
+                   s.sub_metering_1,
+                   s.sub_metering_2,
+                   s.sub_metering_3
+            FROM measurements m
+            JOIN households h ON m.household_id = h.household_id
+            LEFT JOIN sub_metering s ON m.measurement_id = s.measurement_id
+            WHERE m.measurement_id = %s
+            """,
+            (measurement_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404,
+                                detail=f"Measurement {measurement_id} not found")
+        return {"source": "SQL", "data": row}
+    finally:
+        conn.close()
+
+
+@app.put("/sql/measurements/{measurement_id}", summary="[SQL] Update measurement")
+def update_sql_measurement(measurement_id: int, body: MeasurementUpdate):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT measurement_id FROM measurements WHERE measurement_id = %s",
+                    (measurement_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404,
+                                detail=f"Measurement {measurement_id} not found")
+
+        fields = body.model_dump(exclude_none=True)
+        if not fields:
+            raise HTTPException(status_code=400, detail="No fields provided for update")
+
+        set_clause = ", ".join(f"{col} = %s" for col in fields)
+        cur.execute(
+            f"UPDATE measurements SET {set_clause} WHERE measurement_id = %s",
+            list(fields.values()) + [measurement_id],
+        )
+        conn.commit()
+        return {
+            "status":         "updated",
+            "measurement_id": measurement_id,
+            "updated_fields": fields,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        conn.close()
+
+
+@app.delete("/sql/measurements/{measurement_id}", summary="[SQL] Delete measurement")
+def delete_sql_measurement(measurement_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT measurement_id FROM measurements WHERE measurement_id = %s",
+                    (measurement_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404,
+                                detail=f"Measurement {measurement_id} not found")
+
+        cur.execute("DELETE FROM sub_metering WHERE measurement_id = %s", (measurement_id,))
+        cur.execute("DELETE FROM measurements WHERE measurement_id = %s", (measurement_id,))
+        conn.commit()
+        return {
+            "status":         "deleted",
+            "measurement_id": measurement_id,
+            "message":        "Measurement and sub-metering deleted.",
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        conn.close()
+
