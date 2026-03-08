@@ -151,3 +151,28 @@ def test_sql_measurements():
     body = check(f"DELETE /sql/measurements/{mid}",
                  requests.delete(f"{BASE_URL}/sql/measurements/{mid}"))
     print(f"        status={body.get('status')}")
+
+def test_sql_timeseries():
+    print("\n--- SQL: Time-Series ---")
+
+    body = check("GET /sql/latest",
+                 requests.get(f"{BASE_URL}/sql/latest"))
+    d = body.get("data", {})
+    print(f"        datetime={d.get('datetime')}  power={d.get('global_active_power')}")
+
+    body = check("GET /sql/date-range  (2006-12-16 to 2006-12-18)",
+                 requests.get(f"{BASE_URL}/sql/date-range"
+                              "?start_date=2006-12-16&end_date=2006-12-18&limit=5"))
+    print(f"        {_summary_line(body)}")
+
+    body = check("GET /sql/hourly-stats",
+                 requests.get(f"{BASE_URL}/sql/hourly-stats"))
+    first = body.get("data", [{}])[0]
+    print(f"        count={body.get('count')}  "
+          f"hour_0: avg={first.get('avg_power_kW')}  peak={first.get('peak_power_kW')}")
+
+    body = check("GET /sql/monthly-trend  (last 12 months)",
+                 requests.get(f"{BASE_URL}/sql/monthly-trend?months=12"))
+    first = body.get("data", [{}])[0]
+    print(f"        count={body.get('count')}  most_recent_month={first.get('month')}")
+
