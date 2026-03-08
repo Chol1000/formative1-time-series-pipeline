@@ -243,3 +243,46 @@ def test_mongo_timeseries():
     first = body.get("data", [{}])[0]
     print(f"        count={body.get('count')}  most_recent_date={first.get('date')}")
 
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def run():
+    print("=" * 60)
+    print("  TASK 3 - API TEST SUITE")
+    print("=" * 60)
+
+    test_health()
+    test_sql_households()
+    test_sql_measurements()
+    test_sql_timeseries()
+    test_mongo_measurements()
+    test_mongo_timeseries()
+
+    total = _passed + _failed
+    print("\n" + "=" * 60)
+    if _failed == 0:
+        print(f"  RESULT: {_passed}/{total} passed - ALL PASS")
+    else:
+        print(f"  RESULT: {_passed}/{total} passed - {_failed} FAILED")
+    print("=" * 60)
+    print()
+    print("  Endpoints tested:")
+    print("    SQL  Households    POST  GET  GET/{id}  PUT  DELETE")
+    print("    SQL  Measurements  POST  GET  GET/{id}  PUT  DELETE")
+    print("    SQL  Time-Series   latest  date-range  hourly-stats  monthly-trend")
+    print("    MongoDB CRUD       POST  GET  GET/{id}  PUT  DELETE")
+    print("    MongoDB Time-Series  latest  date-range  hourly-stats  daily-summary")
+    print("=" * 60)
+
+    return _failed == 0
+
+
+if __name__ == "__main__":
+    try:
+        success = run()
+        sys.exit(0 if success else 1)
+    except requests.exceptions.ConnectionError:
+        print("\nERROR: Cannot connect to API server.")
+        print("  Start it first:  python task3_api/api.py")
+        sys.exit(2)
