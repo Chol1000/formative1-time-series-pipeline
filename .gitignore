@@ -24,6 +24,6 @@ __pycache__/
 # VS Code
 .vscode/
 
-# Large binary model files (optional — comment out if you want to include them)
+# Large binary model files 
 # data/best_model.joblib
 # data/best_scaler.joblib
