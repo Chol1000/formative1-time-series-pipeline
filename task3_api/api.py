@@ -549,3 +549,229 @@ def delete_sql_measurement(measurement_id: int):
     finally:
         conn.close()
 
+# ============================================================================
+# SQL — TIME-SERIES ENDPOINTS
+# ============================================================================
+
+@app.get("/sql/latest", summary="[SQL] Latest measurement record")
+def get_sql_latest(household_id: Optional[int] = None):
+    conn = get_db_connection()
+    try:
+        params: list = []
+        where = ""
+        if household_id:
+            where = "WHERE m.household_id = %s"
+            params.append(household_id)
+
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            f"""
+            SELECT m.measurement_id,
+                   m.household_id,
+                   h.household_name,
+                   m.measurement_datetime AS datetime,
+                   m.global_active_power,
+                   m.global_reactive_power,
+                   m.voltage,
+                   m.global_intensity
+            FROM measurements m
+            JOIN households h ON m.household_id = h.household_id
+            {where}
+            ORDER BY m.measurement_datetime DESC
+            LIMIT 1
+            """,
+            params,
+        )
+        row = cur.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="No records found")
+        return {"source": "SQL", "query": "Latest Record", "data": row}
+    finally:
+        conn.close()
+
+
+@app.get("/sql/date-range", summary="[SQL] Records in date range")
+def get_sql_date_range(
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date:   str = Query(..., description="End date YYYY-MM-DD"),
+    household_id: Optional[int] = None,
+    limit: int = Query(100, ge=1, le=5000),
+):
+    conn = get_db_connection()
+    try:
+        params: list = [start_date + " 00:00:00", end_date + " 23:59:59"]
+        extra = ""
+        if household_id:
+            extra = "AND m.household_id = %s"
+            params.append(household_id)
+        params.append(limit)
+
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            f"""
+            SELECT m.measurement_id,
+                   h.household_name,
+                   m.measurement_datetime AS datetime,
+                   m.global_active_power,
+                   m.global_reactive_power,
+                   m.voltage,
+                   m.global_intensity
+            FROM measurements m
+            JOIN households h ON m.household_id = h.household_id
+            WHERE m.measurement_datetime BETWEEN %s AND %s
+            {extra}
+            ORDER BY m.measurement_datetime ASC
+            LIMIT %s
+            """,
+            params,
+        )
+        rows = cur.fetchall()
+
+        return {
+            "source":     "SQL",
+            "query":      "Date Range",
+            "start_date": start_date,
+            "end_date":   end_date,
+            "count":      len(rows),
+            "data":       rows,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/sql/hourly-stats", summary="[SQL] Hourly average / peak / min power")
+def get_sql_hourly_stats(household_id: Optional[int] = None):
+    """Return per-hour (0-23) aggregate stats across the entire dataset."""
+    conn = get_db_connection()
+    try:
+        params: list = []
+        where = ""
+        if household_id:
+            where = "WHERE m.household_id = %s"
+            params.append(household_id)
+
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            f"""
+            SELECT HOUR(m.measurement_datetime)                               AS hour,
+                   COUNT(*)                                                    AS record_count,
+                   ROUND(AVG(m.global_active_power), 4)                       AS avg_power_kW,
+                   ROUND(MAX(m.global_active_power), 4)                       AS peak_power_kW,
+                   ROUND(MIN(m.global_active_power), 4)                       AS min_power_kW,
+                   ROUND(AVG(m.voltage), 2)                                   AS avg_voltage_V
+            FROM measurements m
+            {where}
+            GROUP BY hour
+            ORDER BY hour
+            """,
+            params,
+        )
+        rows = cur.fetchall()
+
+        return {
+            "source": "SQL",
+            "query":  "Hourly Stats (all-time)",
+            "count":  len(rows),
+            "data":   rows,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/sql/monthly-trend", summary="[SQL] Monthly consumption trend")
+def get_sql_monthly_trend(
+    household_id: Optional[int] = None,
+    months: int = Query(48, ge=1, le=120, description="Number of months to return"),
+):
+    """Return month-by-month total and average active power (most recent first)."""
+    conn = get_db_connection()
+    try:
+        params: list = []
+        where = ""
+        if household_id:
+            where = "WHERE m.household_id = %s"
+            params.append(household_id)
+        params.append(months)
+
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            f"""
+            SELECT DATE_FORMAT(m.measurement_datetime, '%Y-%m')   AS month,
+                   COUNT(*)                                        AS record_count,
+                   ROUND(SUM(m.global_active_power) / 60.0, 2)    AS total_energy_kWh,
+                   ROUND(AVG(m.global_active_power), 4)            AS avg_power_kW,
+                   ROUND(MAX(m.global_active_power), 4)            AS peak_power_kW,
+                   ROUND(MIN(m.global_active_power), 4)            AS min_power_kW
+            FROM measurements m
+            {where}
+            GROUP BY month
+            ORDER BY month DESC
+            LIMIT %s
+            """,
+            params,
+        )
+        rows = cur.fetchall()
+
+        return {
+            "source": "SQL",
+            "query":  "Monthly Trend",
+            "count":  len(rows),
+            "data":   rows,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/sql/sub-metering", summary="[SQL] Sub-metering energy breakdown by appliance group")
+def get_sql_sub_metering(household_id: Optional[int] = None):
+    """Return total and average energy consumption per sub-metering group
+    (Kitchen, Laundry/AC, Water Heater, Other) across the full dataset."""
+    conn = get_db_connection()
+    try:
+        params: list = []
+        hh_filter = ""
+        if household_id:
+            hh_filter = "AND m.household_id = %s"
+            params.append(household_id)
+
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            f"""
+            SELECT 'Kitchen (Sub-meter 1)'   AS appliance_group,
+                   ROUND(AVG(s.sub_metering_1), 4)   AS avg_wh_per_min,
+                   ROUND(SUM(s.sub_metering_1)/1000, 2) AS total_kWh,
+                   COUNT(*)                           AS readings
+            FROM sub_metering s
+            JOIN measurements m ON s.measurement_id = m.measurement_id
+            WHERE 1=1 {hh_filter}
+            UNION ALL
+            SELECT 'Laundry / AC (Sub-meter 2)',
+                   ROUND(AVG(s.sub_metering_2), 4),
+                   ROUND(SUM(s.sub_metering_2)/1000, 2),
+                   COUNT(*)
+            FROM sub_metering s
+            JOIN measurements m ON s.measurement_id = m.measurement_id
+            WHERE 1=1 {hh_filter}
+            UNION ALL
+            SELECT 'Water Heater (Sub-meter 3)',
+                   ROUND(AVG(s.sub_metering_3), 4),
+                   ROUND(SUM(s.sub_metering_3)/1000, 2),
+                   COUNT(*)
+            FROM sub_metering s
+            JOIN measurements m ON s.measurement_id = m.measurement_id
+            WHERE 1=1 {hh_filter}
+            ORDER BY total_kWh DESC
+            """,
+            params * 3,
+        )
+        rows = cur.fetchall()
+
+        return {
+            "source": "SQL",
+            "query":  "Sub-metering Energy Breakdown",
+            "count":  len(rows),
+            "data":   rows,
+        }
+    finally:
+        conn.close()
