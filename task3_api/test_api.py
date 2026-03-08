@@ -114,4 +114,40 @@ def test_sql_households():
                  requests.delete(f"{BASE_URL}/sql/households/{hh_id}"))
     print(f"        status={body.get('status')}")
 
+def test_sql_measurements():
+    print("\n--- SQL: Measurements CRUD ---")
 
+    payload = {
+        "household_id": 1,
+        "measurement_datetime": f"2030-{int(time.time()) % 12 + 1:02d}-{int(time.time()) % 28 + 1:02d} {int(time.time()) % 24:02d}:{int(time.time()) % 60:02d}:00",
+        "global_active_power": 3.5,
+        "global_reactive_power": 0.21,
+        "voltage": 235.0,
+        "global_intensity": 14.8,
+        "sub_metering_1": 0.0,
+        "sub_metering_2": 1.0,
+        "sub_metering_3": 15.0,
+    }
+    body = check("POST /sql/measurements",
+                 requests.post(f"{BASE_URL}/sql/measurements", json=payload),
+                 expected_status=201)
+    mid = body.get("measurement_id")
+    print(f"        measurement_id={mid}  datetime={body.get('datetime')}")
+
+    body = check("GET  /sql/measurements?limit=5",
+                 requests.get(f"{BASE_URL}/sql/measurements?limit=5"))
+    print(f"        {_summary_line(body)}")
+
+    body = check(f"GET  /sql/measurements/{mid}",
+                 requests.get(f"{BASE_URL}/sql/measurements/{mid}"))
+    d = body.get("data", {})
+    print(f"        id={d.get('measurement_id')}  power={d.get('global_active_power')}")
+
+    body = check(f"PUT  /sql/measurements/{mid}",
+                 requests.put(f"{BASE_URL}/sql/measurements/{mid}",
+                              json={"global_active_power": 3.75, "voltage": 234.5}))
+    print(f"        updated_fields={body.get('updated_fields')}")
+
+    body = check(f"DELETE /sql/measurements/{mid}",
+                 requests.delete(f"{BASE_URL}/sql/measurements/{mid}"))
+    print(f"        status={body.get('status')}")
