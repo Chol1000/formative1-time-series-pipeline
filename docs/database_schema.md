@@ -96,3 +96,72 @@ Pre-computed hourly summary stats built from `measurements` during the initial d
 **Indexes:** `idx_hourly_dt`, `idx_hourly_hh_dt`
 
 ---
+
+### Full DDL
+
+```sql
+CREATE TABLE IF NOT EXISTS households (
+    household_id   INT           NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    household_name VARCHAR(255)  NOT NULL UNIQUE,
+    location       VARCHAR(255),
+    area_sqm       DOUBLE,
+    occupants      INT,
+    created_date   TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS measurements (
+    measurement_id        INT      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    household_id          INT      NOT NULL,
+    measurement_datetime  DATETIME NOT NULL,
+    global_active_power   DOUBLE   NOT NULL,
+    global_reactive_power DOUBLE,
+    voltage               DOUBLE,
+    global_intensity      DOUBLE,
+    FOREIGN KEY (household_id) REFERENCES households(household_id),
+    INDEX idx_meas_dt    (measurement_datetime),
+    INDEX idx_meas_hh_dt (household_id, measurement_datetime)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS sub_metering (
+    sub_meter_id   INT    NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    measurement_id INT    NOT NULL UNIQUE,
+    sub_metering_1 DOUBLE,
+    sub_metering_2 DOUBLE,
+    sub_metering_3 DOUBLE,
+    FOREIGN KEY (measurement_id) REFERENCES measurements(measurement_id),
+    INDEX idx_sub_mid (measurement_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS hourly_aggregates (
+    hourly_id         INT      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    household_id      INT      NOT NULL,
+    hour_datetime     DATETIME NOT NULL,
+    avg_active_power  DOUBLE,
+    max_active_power  DOUBLE,
+    min_active_power  DOUBLE,
+    total_consumption DOUBLE,
+    reading_count     INT,
+    FOREIGN KEY (household_id) REFERENCES households(household_id),
+    UNIQUE KEY uq_hourly (household_id, hour_datetime),
+    INDEX idx_hourly_dt    (hour_datetime),
+    INDEX idx_hourly_hh_dt (household_id, hour_datetime)
+) ENGINE=InnoDB;
+```
+
+---
+
+### SQL Query Catalogue (Task 2)
+
+Seven queries are executed automatically by `task2_databases/task2_main.py` and results saved to `outputs/task2/sql_query_results.txt`.
+
+| # | Query | Tables Used |
+|---|-------|-------------|
+| 1 | Latest 10 measurements (ORDER BY datetime DESC) | `measurements` |
+| 2 | Hourly averages 2006-12-16 → 2006-12-19 | `measurements` |
+| 3 | JOIN: measurements + sub-metering (first 15 rows) | `measurements`, `sub_metering` |
+| 4 | Top-10 peak demand hours | `hourly_aggregates` |
+| 5 | Monthly consumption trend (48 months) | `measurements` |
+| 6 | Sub-metering energy share per appliance (UNION ALL) | `sub_metering` |
+| 7 | Average consumption by day of week | `measurements` |
+
+---
