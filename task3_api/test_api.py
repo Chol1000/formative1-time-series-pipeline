@@ -80,3 +80,38 @@ def test_health():
     body = check("GET /", requests.get(f"{BASE_URL}/"))
     print(f"        status={body.get('status')}  "
           f"mongo_docs_loaded={body.get('mongo_docs_loaded')}")
+
+def test_sql_households():
+    print("\n--- SQL: Households CRUD ---")
+
+    body = check("GET  /sql/households",
+                 requests.get(f"{BASE_URL}/sql/households"))
+    print(f"        {_summary_line(body)}")
+
+    payload = {
+        "household_name": f"Test House {int(time.time())}",
+        "location": "Paris, France",
+        "area_sqm": 85.0,
+        "occupants": 3,
+    }
+    body = check("POST /sql/households",
+                 requests.post(f"{BASE_URL}/sql/households", json=payload),
+                 expected_status=201)
+    hh_id = body.get("household_id")
+    print(f"        household_id={hh_id}")
+
+    body = check(f"GET  /sql/households/{hh_id}",
+                 requests.get(f"{BASE_URL}/sql/households/{hh_id}"))
+    d = body.get("data", {})
+    print(f"        id={d.get('household_id')}  name={d.get('household_name')}")
+
+    body = check(f"PUT  /sql/households/{hh_id}",
+                 requests.put(f"{BASE_URL}/sql/households/{hh_id}",
+                              json={"area_sqm": 90.0, "occupants": 4}))
+    print(f"        updated_fields={body.get('updated_fields')}")
+
+    body = check(f"DELETE /sql/households/{hh_id}",
+                 requests.delete(f"{BASE_URL}/sql/households/{hh_id}"))
+    print(f"        status={body.get('status')}")
+
+
