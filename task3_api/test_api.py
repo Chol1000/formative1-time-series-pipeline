@@ -176,3 +176,41 @@ def test_sql_timeseries():
     first = body.get("data", [{}])[0]
     print(f"        count={body.get('count')}  most_recent_month={first.get('month')}")
 
+def test_mongo_measurements():
+    print("\n--- MongoDB: Measurements CRUD ---")
+
+    payload = {
+        "household_id": 1,
+        "measurement_datetime": f"2031-{int(time.time()) % 12 + 1:02d}-{int(time.time()) % 28 + 1:02d} {int(time.time()) % 24:02d}:{int(time.time()) % 60:02d}:00",
+        "global_active_power": 2.8,
+        "global_reactive_power": 0.18,
+        "voltage": 236.5,
+        "global_intensity": 12.2,
+        "sub_metering_1": 1.0,
+        "sub_metering_2": 0.0,
+        "sub_metering_3": 12.0,
+    }
+    body = check("POST /mongo/measurements",
+                 requests.post(f"{BASE_URL}/mongo/measurements", json=payload),
+                 expected_status=201)
+    doc_id = body.get("_id")
+    print(f"        _id={doc_id}  timestamp={body.get('timestamp')}")
+
+    body = check("GET  /mongo/measurements?limit=5",
+                 requests.get(f"{BASE_URL}/mongo/measurements?limit=5"))
+    print(f"        total_in_store={body.get('total_in_store')}  returned={body.get('count')}")
+
+    body = check(f"GET  /mongo/measurements/{doc_id}",
+                 requests.get(f"{BASE_URL}/mongo/measurements/{doc_id}"))
+    d = body.get("data", {})
+    print(f"        _id={d.get('_id')}  power={d.get('global_active_power')}")
+
+    body = check(f"PUT  /mongo/measurements/{doc_id}",
+                 requests.put(f"{BASE_URL}/mongo/measurements/{doc_id}",
+                              json={"global_active_power": 3.1, "voltage": 235.8}))
+    print(f"        updated_fields={body.get('updated_fields')}")
+
+    body = check(f"DELETE /mongo/measurements/{doc_id}",
+                 requests.delete(f"{BASE_URL}/mongo/measurements/{doc_id}"))
+    print(f"        status={body.get('status')}")
+
