@@ -428,9 +428,7 @@ STEP 5:  t+ 1min  [2006-12-17 01:44]  2.6218 kW
 - [UCI Household Electric Power Consumption Dataset — Kaggle](https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Scikit-learn Documentation](https://scikit-learn.org/)
-- [MongoDB Aggregation Pipeline](https://www.mongodb.com/docs/manual/core/aggregation-pipeline/)
-
-This project addresses the problem of one-minute-ahead residential electricity demand forecasting. Given all household electricity measurements available up to time $t$, the objective is to accurately predict the global active power (kW) at time $t+1$. Accurate short-term load forecasting is fundamental to smart-grid demand-response systems, enabling energy providers to balance supply against demand, schedule storage dispatch, and reduce grid stress during peak periods.
+- [MongoDB Aggregation Pipeline](https://www.mongodb.com/docs/manual/core/aggregation-pipeline/) Given all household electricity measurements available up to time $t$, the objective is to accurately predict the global active power (kW) at time $t+1$. Accurate short-term load forecasting is fundamental to smart-grid demand-response systems, enabling energy providers to balance supply against demand, schedule storage dispatch, and reduce grid stress during peak periods.
 
 ---
 
