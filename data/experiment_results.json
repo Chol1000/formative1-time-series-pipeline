@@ -1,0 +1,42 @@
+[
+  {
+    "Model": "Naive Persistence",
+    "Hyperparameters": "none",
+    "N_train": 1660159,
+    "N_test": 415040,
+    "MAE": 0.0692,
+    "RMSE": 0.217,
+    "R2": 0.9387,
+    "MAPE (%)": 7.06
+  },
+  {
+    "Model": "Linear Regression",
+    "Hyperparameters": "{'fit_intercept': True}",
+    "N_train": 1660159,
+    "N_test": 415040,
+    "MAE": 0.0831,
+    "RMSE": 0.2161,
+    "R2": 0.9392,
+    "MAPE (%)": 9.89
+  },
+  {
+    "Model": "Random Forest (tuned)",
+    "Hyperparameters": "{'n_estimators': 100, 'min_samples_split': 5, 'min_samples_leaf': 2, 'max_features': 0.7, 'max_depth': 8}",
+    "N_train": 1660159,
+    "N_test": 415040,
+    "MAE": 0.0694,
+    "RMSE": 0.2133,
+    "R2": 0.9408,
+    "MAPE (%)": 6.97
+  },
+  {
+    "Model": "Gradient Boosting (tuned, abs_error)",
+    "Hyperparameters": "{'subsample': 0.8, 'n_estimators': 400, 'min_samples_split': 5, 'max_features': None, 'max_depth': 3, 'learning_rate': 0.05}",
+    "N_train": 1660159,
+    "N_test": 415040,
+    "MAE": 0.0706,
+    "RMSE": 0.2153,
+    "R2": 0.9397,
+    "MAPE (%)": 7.05
+  }
+]
