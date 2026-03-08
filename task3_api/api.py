@@ -36,3 +36,201 @@ DB_CONFIG = {
     "password": "",
     "database": "household_power",
 }
+
+# ---------------------------------------------------------------------------
+# In-memory MongoDB store
+# ---------------------------------------------------------------------------
+mongo_store:   dict[str, dict[str, Any]] = {}
+mongo_counter: int = 0
+
+MONGO_SEED_DOCS = 1_000   # total docs to seed on startup
+
+
+def get_next_mongo_id() -> str:
+    global mongo_counter
+    mongo_counter += 1
+    return str(mongo_counter)
+
+
+def _build_mongo_doc(row: dict) -> dict[str, Any]:
+    ts_str = row["measurement_datetime"]
+    if hasattr(ts_str, 'isoformat'):
+        ts_str = ts_str.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        ts_dt = datetime.fromisoformat(ts_str)
+    except ValueError:
+        ts_dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+
+    return {
+        "_id":                   str(row["measurement_id"]),
+        "household_id":          1,
+        "household_info": {
+            "name":     "Household A",
+            "location": "Sceaux, Hauts-de-Seine, France",
+        },
+        "timestamp":             ts_str,
+        "date":                  ts_dt.strftime("%Y-%m-%d"),
+        "hour":                  ts_dt.hour,
+        "day_of_week":           ts_dt.weekday(),
+        "global_active_power":   round(float(row["global_active_power"]   or 0), 3),
+        "global_reactive_power": round(float(row["global_reactive_power"] or 0), 3),
+        "voltage":               round(float(row["voltage"]               or 0), 2),
+        "global_intensity":      round(float(row["global_intensity"]      or 0), 2),
+        "sub_metering": [
+            {"meter_id": 1, "name": "Kitchen",
+             "consumption_wh": round(float(row["sub_metering_1"] or 0), 1)},
+            {"meter_id": 2, "name": "Laundry / AC",
+             "consumption_wh": round(float(row["sub_metering_2"] or 0), 1)},
+            {"meter_id": 3, "name": "Water Heater",
+             "consumption_wh": round(float(row["sub_metering_3"] or 0), 1)},
+        ],
+    }
+
+
+def init_mongo_store() -> None:
+    """Seed in-memory store with step-sampled rows + the actual last row.
+
+    Step-sampling guarantees the full time range is represented so that
+    /mongo/latest returns 2010-11-26 (end of dataset), not 2006-12-16.
+    """
+    global mongo_counter
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cur  = conn.cursor(dictionary=True)
+
+        _sel = (
+            "SELECT m.measurement_id,"
+            "       m.measurement_datetime,"
+            "       m.global_active_power,"
+            "       m.global_reactive_power,"
+            "       m.voltage,"
+            "       m.global_intensity,"
+            "       s.sub_metering_1,"
+            "       s.sub_metering_2,"
+            "       s.sub_metering_3"
+            " FROM   measurements m"
+            " LEFT JOIN sub_metering s ON m.measurement_id = s.measurement_id"
+        )
+
+        # Total rows available
+        cur.execute("SELECT COUNT(*) AS n FROM measurements")
+        total = cur.fetchone()["n"]
+        step  = max(1, total // (MONGO_SEED_DOCS - 1))
+
+        # N-1 step-sampled rows (spans full time range)
+        cur.execute(
+            f"{_sel} WHERE (m.measurement_id - 1) % {step} = 0"
+            f" ORDER BY m.measurement_datetime ASC LIMIT {MONGO_SEED_DOCS - 1}"
+        )
+        rows = cur.fetchall()
+
+        # Actual last row (ensures /mongo/latest returns dataset end date)
+        cur.execute(f"{_sel} ORDER BY m.measurement_datetime DESC LIMIT 1")
+        last = cur.fetchone()
+
+        cur.close()
+        conn.close()
+
+        for row in rows:
+            doc = _build_mongo_doc(row)
+            mongo_store[doc["_id"]] = doc
+
+        if last and str(last["measurement_id"]) not in mongo_store:
+            doc = _build_mongo_doc(last)
+            mongo_store[doc["_id"]] = doc
+
+        mongo_counter = max((int(k) for k in mongo_store), default=0)
+        print(f"[startup] MongoDB store seeded: {len(mongo_store)} documents "
+              f"(step={step}, total_rows={total})")
+    except Exception as exc:
+        print(f"[startup] MongoDB seeding failed: {exc}", file=sys.stderr)
+
+# ---------------------------------------------------------------------------
+# Lifespan (replaces deprecated @app.on_event)
+# ---------------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_mongo_store()
+    yield
+
+
+app = FastAPI(
+    title="Household Power Consumption API",
+    description=(
+        "Time-series REST API for the UCI Household Electric Power Consumption dataset.\n\n"
+        "Provides full **CRUD** and **time-series** endpoints for both "
+        "**SQL (MySQL)** and **MongoDB** (in-memory store seeded from MySQL).\n\n"
+        "Start: `python task3_api/api.py`  |  Tests: `python task3_api/test_api.py`"
+    ),
+    version="3.0.0",
+    lifespan=lifespan,
+)
+
+
+# ============================================================================
+# PYDANTIC MODELS
+# ============================================================================
+
+class MeasurementCreate(BaseModel):
+    household_id:          int            = Field(..., description="Household identifier")
+    measurement_datetime:  str            = Field(..., description="Datetime YYYY-MM-DD HH:MM:SS")
+    global_active_power:   float          = Field(..., description="Active power in kW")
+    global_reactive_power: Optional[float] = Field(None, description="Reactive power in kW")
+    voltage:               Optional[float] = Field(None, description="Voltage in V")
+    global_intensity:      Optional[float] = Field(None, description="Current intensity in A")
+    sub_metering_1:        Optional[float] = Field(None, description="Sub-metering 1 (Wh)")
+    sub_metering_2:        Optional[float] = Field(None, description="Sub-metering 2 (Wh)")
+    sub_metering_3:        Optional[float] = Field(None, description="Sub-metering 3 (Wh)")
+
+
+class MeasurementUpdate(BaseModel):
+    global_active_power:   Optional[float] = None
+    global_reactive_power: Optional[float] = None
+    voltage:               Optional[float] = None
+    global_intensity:      Optional[float] = None
+
+
+class HouseholdCreate(BaseModel):
+    household_name: str            = Field(..., description="Name of the household")
+    location:       Optional[str]  = Field(None, description="Location / address")
+    area_sqm:       Optional[float] = Field(None, description="Area in square metres")
+    occupants:      Optional[int]  = Field(None, description="Number of occupants")
+
+
+class HouseholdUpdate(BaseModel):
+    household_name: Optional[str]  = None
+    location:       Optional[str]  = None
+    area_sqm:       Optional[float] = None
+    occupants:      Optional[int]  = None
+
+
+# ============================================================================
+# DB HELPER
+# ============================================================================
+
+def get_db_connection() -> mysql.connector.connection.MySQLConnection:
+    return mysql.connector.connect(**DB_CONFIG)
+
+
+# ============================================================================
+# HEALTH CHECK
+# ============================================================================
+
+@app.get("/", summary="Health Check")
+def health_check():
+    return {
+        "status":            "healthy",
+        "api":               "Household Power Consumption API",
+        "version":           "3.0.0",
+        "db_host":           DB_CONFIG["host"],
+        "db_name":           DB_CONFIG["database"],
+        "mongo_docs_loaded": len(mongo_store),
+        "endpoints": {
+            "sql_households":     "POST GET GET/{id} PUT DELETE  /sql/households",
+            "sql_measurements":   "POST GET GET/{id} PUT DELETE  /sql/measurements",
+            "sql_timeseries":     "GET /sql/latest  /sql/date-range  /sql/hourly-stats  /sql/monthly-trend  /sql/sub-metering",
+            "mongo_measurements": "POST GET GET/{id} PUT DELETE  /mongo/measurements",
+            "mongo_timeseries":   "GET /mongo/latest  /mongo/date-range  /mongo/hourly-stats  /mongo/daily-summary",
+            "docs": "/docs",
+        },
+    }
