@@ -234,3 +234,125 @@ def health_check():
             "docs": "/docs",
         },
     }
+
+# ============================================================================
+# SQL — HOUSEHOLD CRUD
+# ============================================================================
+
+@app.post("/sql/households", status_code=201, summary="[SQL] Create household")
+def create_sql_household(body: HouseholdCreate):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO households (household_name, location, area_sqm, occupants) "
+            "VALUES (%s, %s, %s, %s)",
+            (body.household_name, body.location, body.area_sqm, body.occupants),
+        )
+        conn.commit()
+        return {"status": "created", "household_id": cur.lastrowid}
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        conn.close()
+
+
+@app.get("/sql/households", summary="[SQL] List all households")
+def list_sql_households():
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            "SELECT household_id, household_name, location, area_sqm, occupants "
+            "FROM households ORDER BY household_id"
+        )
+        rows = cur.fetchall()
+        return {"source": "SQL", "count": len(rows), "data": rows}
+    finally:
+        conn.close()
+
+
+@app.get("/sql/households/{household_id}", summary="[SQL] Get household by ID")
+def get_sql_household(household_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            "SELECT household_id, household_name, location, area_sqm, occupants "
+            "FROM households WHERE household_id = %s",
+            (household_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Household {household_id} not found")
+        return {"source": "SQL", "data": row}
+    finally:
+        conn.close()
+
+
+@app.put("/sql/households/{household_id}", summary="[SQL] Update household")
+def update_sql_household(household_id: int, body: HouseholdUpdate):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT household_id FROM households WHERE household_id = %s",
+                    (household_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail=f"Household {household_id} not found")
+
+        fields = body.model_dump(exclude_none=True)
+        if not fields:
+            raise HTTPException(status_code=400, detail="No fields provided for update")
+
+        set_clause = ", ".join(f"{col} = %s" for col in fields)
+        cur.execute(
+            f"UPDATE households SET {set_clause} WHERE household_id = %s",
+            list(fields.values()) + [household_id],
+        )
+        conn.commit()
+        return {"status": "updated", "household_id": household_id, "updated_fields": fields}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        conn.close()
+
+
+@app.delete("/sql/households/{household_id}", summary="[SQL] Delete household")
+def delete_sql_household(household_id: int):
+    if household_id == 1:
+        raise HTTPException(
+            status_code=403,
+            detail="Household 1 is the primary dataset household and cannot be deleted.",
+        )
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT household_id FROM households WHERE household_id = %s",
+                    (household_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail=f"Household {household_id} not found")
+
+        cur.execute(
+            "DELETE FROM sub_metering WHERE measurement_id IN "
+            "(SELECT measurement_id FROM measurements WHERE household_id = %s)",
+            (household_id,),
+        )
+        cur.execute("DELETE FROM measurements WHERE household_id = %s", (household_id,))
+        cur.execute("DELETE FROM households WHERE household_id = %s", (household_id,))
+        conn.commit()
+        return {
+            "status":       "deleted",
+            "household_id": household_id,
+            "message":      "Household and all related measurements deleted.",
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        conn.close()
