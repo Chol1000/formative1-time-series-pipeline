@@ -27,7 +27,8 @@ The [UCI Individual Household Electric Power Consumption dataset](https://www.ka
 | Target | `global_active_power` (kW) |
 | Channels | Voltage (V), Global Intensity (A), Reactive Power (kVAR), Sub-metering 1/2/3 (Wh) |
 
-> The raw file is excluded from version control. Download it from the Kaggle link above and place it in the project root before running any task.
+> The raw file is excluded from version control (127 MB exceeds GitHub's file size limit).  
+> Use the provided `download_data.py` script to fetch it automatically — see the Quick Start section below.
 
 ---
 
@@ -48,7 +49,7 @@ The pipeline is divided into four sequential tasks:
 
 ```
 TimeSeriesDataPipeline/
-├── household_power_consumption.txt    # Raw dataset (127 MB) — not tracked in git
+├── download_data.py                   # Run this first — auto-downloads the 127 MB dataset
 ├── requirements.txt
 ├── README.md
 ├── task1_eda/
@@ -94,22 +95,20 @@ TimeSeriesDataPipeline/
 
 ---
 
-## Prerequisites
+## Quick Start (for graders and first-time users)
 
-- Python 3.8+
-- MySQL 8.0+ running on `localhost:3306`, root user, no password
-- MongoDB (optional) — `mongodb://localhost:27017`. Task 2 falls back to JSON simulation mode automatically if unavailable.
+> **The raw dataset is not stored in the repository.**  
+> GitHub enforces a 100 MB file size limit and the dataset is 127 MB.  
+> The script `download_data.py` (included in the repo root) fetches it automatically from the UCI ML Repository.
 
----
-
-## Setup
+### Step-by-step setup
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Chol1000/formative1-time-series-pipeline.git
 cd formative1-time-series-pipeline
 
-# 2. Create and activate virtual environment
+# 2. Create and activate a virtual environment
 python3 -m venv venv
 source venv/bin/activate        # macOS / Linux
 # venv\Scripts\activate         # Windows
@@ -117,14 +116,35 @@ source venv/bin/activate        # macOS / Linux
 # 3. Install all dependencies
 pip install -r requirements.txt
 
-# 4. Download the dataset
-# Download household_power_consumption.txt from:
-# https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data
-# Place it in the project root before running any task.
+# 4. Download the dataset (one-time, ~127 MB)
+python download_data.py
+```
 
-# 5. Create the MySQL database (one-time setup)
+**What `download_data.py` does:**
+- Downloads `household_power_consumption.zip` from the UCI ML Repository
+- Extracts `household_power_consumption.txt` into the project root
+- Deletes the zip file after extraction
+- Prints a progress bar during download
+- If the file already exists, it skips the download safely
+
+**If the automatic download fails**, download the file manually from:  
+https://www.kaggle.com/datasets/uciml/electric-power-consumption-data-set/data  
+and place `household_power_consumption.txt` in the project root.
+
+```bash
+# 5. Create the MySQL database (one-time)
 mysql -u root -e "CREATE DATABASE IF NOT EXISTS household_power;"
 ```
+
+After these five steps all four tasks can be run in order.
+
+---
+
+## Prerequisites
+
+- Python 3.8+
+- MySQL 8.0+ running on `localhost:3306`, root user, no password
+- MongoDB (optional) — `mongodb://localhost:27017`. Task 2 falls back to JSON simulation mode automatically if unavailable.
 
 ---
 
