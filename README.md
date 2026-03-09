@@ -95,7 +95,7 @@ TimeSeriesDataPipeline/
 
 ---
 
-## Quick Start (for graders and first-time users)
+## Quick Start (for first-time users)
 
 > **The raw dataset is not stored in the repository.**  
 > GitHub enforces a 100 MB file size limit and the dataset is 127 MB.  
